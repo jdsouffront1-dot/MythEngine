@@ -1,0 +1,104 @@
+﻿{-# LANGUAGE NamedFieldPuns #-}
+module Main where
+
+-- === IMPORTS ===
+import System.Directory (createDirectoryIfMissing)
+import System.IO (hFlush, stdout)
+import System.Random (randomRIO)
+import Data.Time.Clock (getCurrentTime, diffUTCTime, UTCTime)
+import Text.Printf (printf)
+import Control.Monad (when)
+import Data.IORef (IORef, newIORef, modifyIORef, readIORef)
+import Synthesis (MetaState(..), initialMetaState, updateMetaState)
+
+-- === CONFIG ===
+numCycles :: Int
+numCycles = 200
+
+initialEntropy :: Double
+initialEntropy = 2.5
+
+-- === SIMULATION STATE ===
+data FieldState = FieldState
+    { coherence :: Double
+    , entropy   :: Double
+    , flux      :: Double
+    } deriving (Show)
+
+data SimulationState = SimulationState
+    { fieldState   :: FieldState
+    , cycleCount   :: Int
+    , metricHandle :: IORef [(Int, Double, Double, Double)] -- Cycle, Coh, ε, ε_GW
+    , metaState    :: MetaState
+    }
+
+-- === HELPERS ===
+randomDouble :: Double -> Double -> IO Double
+randomDouble a b = randomRIO (a, b)
+
+generateEntropy :: FieldState -> Double -> IO FieldState
+generateEntropy fs adj = do
+    delta <- randomDouble (-adj) adj
+    let newEntropy = max 1.0 (entropy fs + delta)
+    return fs {entropy = newEntropy, flux = abs delta}
+
+updateCoherence :: FieldState -> Double -> FieldState
+updateCoherence fs threshold
+    | coherence fs > threshold = fs {coherence = coherence fs + (0.5 * flux fs) / entropy fs}
+    | otherwise                = fs {coherence = max 0.1 (coherence fs - (0.25 * flux fs))}
+
+calculateMetrics :: FieldState -> (Double, Double)
+calculateMetrics fs =
+    let epsilon     = entropy fs * 30.0 + (1000.0 / coherence fs)
+        epsilon_GW  = epsilon / 10000.0
+    in (epsilon, epsilon_GW)
+
+-- Run a single cycle
+runCycle :: SimulationState -> IO SimulationState
+runCycle sim = do
+    let fs = fieldState sim
+        MetaState {coherenceAdjustment, explorationAdjustment} = metaState sim
+    newFs <- generateEntropy fs explorationAdjustment
+    let newFs' = updateCoherence newFs 1.5
+        (epsilon, epsilon_GW) = calculateMetrics newFs'
+        newCycle = cycleCount sim + 1
+    modifyIORef (metricHandle sim) ((newCycle, coherence newFs', epsilon, epsilon_GW) :)
+    let updatedSim = sim {fieldState = newFs', cycleCount = newCycle}
+        finalSim = updatedSim {metaState = updateMetaState (metaState updatedSim) (coherence newFs')}
+    when (newCycle `mod` 10 == 0) $
+        printf "Cycle %4d | Coh: %.3f | ε: %.2e | ε_GW: %.2e *EVENT*\n" newCycle (coherence newFs') epsilon epsilon_GW
+    return finalSim
+
+-- Run simulation loop
+runSimulation :: SimulationState -> IO ()
+runSimulation sim
+    | cycleCount sim >= numCycles = return ()
+    | otherwise = do
+        newSim <- runCycle sim
+        runSimulation newSim
+
+-- Save metrics
+saveMetrics :: SimulationState -> IO ()
+saveMetrics sim = do
+    allMetrics <- readIORef (metricHandle sim)
+    let header  = "Cycle,Coherence,Epsilon,Epsilon_GW\n"
+        content = header ++ unlines [printf "%d,%.8f,%.8f,%.8e" c coh e egw | (c, coh, e, egw) <- reverse allMetrics]
+    writeFile "data/metrics.csv" content
+    putStrLn "Metrics (with Epsilon) -> data/metrics.csv"
+
+-- Entry
+main :: IO ()
+main = do
+    createDirectoryIfMissing True "data"
+    metrics <- newIORef []
+    let initialSim = SimulationState
+            { fieldState   = FieldState 1.0 initialEntropy 0.0
+            , cycleCount   = 0
+            , metricHandle = metrics
+            , metaState    = initialMetaState
+            }
+    runSimulation initialSim
+    saveMetrics initialSim
+    putStrLn "--- Simulation Complete with Phase 7 Meta-Adaptive Layer ---"
+
+

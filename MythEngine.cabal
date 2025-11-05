@@ -1,0 +1,42 @@
+﻿cabal-version:       >=1.10
+name:                MythEngine
+version:             0.1.0.0
+author:              Juan Souffront
+maintainer:          juan@example.com
+build-type:          Simple
+license:             MIT
+
+library
+  exposed-modules:     Adaptive, Metrics, Plot
+  hs-source-dirs:      src
+  build-depends:
+      base >=4.14 && <5,
+      time,
+      random,
+      containers,
+      directory,
+      filepath,
+      bytestring,
+      vector,
+      cassava,
+      matplotlib
+  default-language:    Haskell2010
+
+executable MythEngine
+  main-is:             Main.hs
+  other-modules:       Profiler, Verifier, Plot, Synthesis
+  hs-source-dirs:      src
+  build-depends:
+      base >=4.14 && <5,
+      MythEngine,
+      time,
+      random,
+      containers,
+      directory,
+      filepath,
+      bytestring,
+      vector,
+      cassava,
+      matplotlib
+  default-language:    Haskell2010
+

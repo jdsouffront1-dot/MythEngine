@@ -1,0 +1,2 @@
+rows_merged,overlap_with_projection,overlap_with_validation,n_overlap_pred_hist,phi_gap_mean_abs,phi_gap_rel,n_overlap_eps,eps_gap_mean_abs,eps_gap_rel,validation_rows,val_mae,val_corr,drift_slope,drift_intercept,closure_index
+210,0,200,0,,,0,,,200,0.12613879969681366,0.8690223876034476,,,0.9672555969008619
